@@ -1,0 +1,47 @@
+name: Blob storage website CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "public/**"
+
+
+env:
+  source-path: "./public/"
+  storage-account-name: ${{ secrets.STORAGE_ACCOUNT_NAME }}
+  cdn-profile-name: ${{ secrets.CDN_PROFILE_NAME }}
+  cdn-endpoint: ${{ secrets.CDN_ENDPOINT }}
+  resource-group: ${{ secrets.RESOURCE_GROUP }}
+
+permissions:
+      id-token: write
+      contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: azure/login@v1
+      with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Upload to blob storage
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+            az storage blob upload-batch --overwrite --account-name ${{ env.storage-account-name }} --auth-mode key -d '$web' -s ${{ env.source-path }}
+    - name: Purge CDN endpoint
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          az afd endpoint purge --content-paths  "/*" --profile-name ${{ env.cdn-profile-name }} --endpoint-name ${{ env.cdn-endpoint }} --resource-group ${{ env.resource-group }}
+  # Azure logout
+    - name: logout
+      run: |
+            az logout
+      if: always()
